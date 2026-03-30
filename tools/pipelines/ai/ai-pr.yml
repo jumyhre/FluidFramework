@@ -1,0 +1,98 @@
+trigger: none
+
+pr:
+  branches:
+    include:
+      - ai/*
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+- group: ai-pr-bot-secrets
+- name: GITHUB_OWNER
+  value: microsoft
+- name: GITHUB_REPO
+  value: FluidFramework
+- name: GITHUB_BASE_BRANCH
+  value: main
+
+steps:
+- checkout: self
+  persistCredentials: true
+
+- bash: |
+    set -euo pipefail
+
+    echo "== Azure DevOps PR Context =="
+    echo "PR ID: $SYSTEM_PULLREQUEST_PULLREQUESTID"
+    echo "Source branch: $SYSTEM_PULLREQUEST_SOURCEBRANCH"
+    echo "Target branch: $SYSTEM_PULLREQUEST_TARGETBRANCH"
+
+    # Normalize branch name (refs/heads/ai/foo -> ai/foo)
+    SRC_BRANCH="${SYSTEM_PULLREQUEST_SOURCEBRANCH#refs/heads/}"
+    GH_BRANCH="ado-${SYSTEM_PULLREQUEST_PULLREQUESTID}"
+
+    echo "GitHub branch will be: $GH_BRANCH"
+
+    # ---- Fetch PR title + description from ADO ----
+    ADO_PR_API="${SYSTEM_TEAMFOUNDATIONCOLLECTIONURI}${SYSTEM_TEAMPROJECTID}/_apis/git/repositories/${BUILD_REPOSITORY_ID}/pullRequests/${SYSTEM_PULLREQUEST_PULLREQUESTID}?api-version=7.1"
+
+    PR_JSON=$(curl -sS \
+      -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
+      "$ADO_PR_API")
+
+    PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
+    PR_DESC=$(echo "$PR_JSON" | jq -r '.description')
+
+    echo "== PR Title =="
+    echo "$PR_TITLE"
+
+    echo "== PR Description =="
+    echo "$PR_DESC"
+
+    # ---- Push branch to GitHub ----
+    git remote remove github 2>/dev/null || true
+    git remote add github "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git"
+
+    git config --global http.extraheader "Authorization: Bearer $GITHUB_PAT"
+
+
+    git push github HEAD:refs/heads/$GH_BRANCH --force
+
+    # ---- Build PR body safely (multiline-safe) ----
+    PR_BODY="$(cat <<EOF
+    ${PR_DESC}
+
+    🔗 **Source ADO PR:**
+    ${SYSTEM_TEAMFOUNDATIONCOLLECTIONURI}${SYSTEM_TEAMPROJECTID}/_git/${BUILD_REPOSITORY_NAME}/pullrequest/${SYSTEM_PULLREQUEST_PULLREQUESTID}
+    EOF
+    )"
+
+    # ---- Create GitHub PR payload ----
+    CREATE_PR_PAYLOAD="$(jq -n \
+      --arg title "$PR_TITLE" \
+      --arg head "$GH_BRANCH" \
+      --arg base "$GITHUB_BASE_BRANCH" \
+      --arg body "$PR_BODY" \
+      '{
+        title: $title,
+        head: $head,
+        base: $base,
+        body: $body,
+        draft: true
+      }'
+    )"
+
+    echo "Creating GitHub PR..."
+
+    curl -sS -X POST \
+      -H "Authorization: token ${GITHUB_PAT}" \
+      -H "Accept: application/vnd.github+json" \
+      https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/pulls \
+      -d "$CREATE_PR_PAYLOAD" \
+      || echo "PR may already exist — branch updated."
+
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+    GITHUB_PAT: $(GITHUB_PAT)
