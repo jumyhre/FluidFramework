@@ -95,4 +95,4 @@ steps:
 
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-    GITHUB_PAT: $(GITHUB_PAT)
+    GITHUB_PAT: $(GH_PAT)
