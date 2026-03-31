@@ -4,6 +4,7 @@ pr:
   branches:
     include:
       - ai/*
+      - copilot/*
 
 pool:
   vmImage: ubuntu-latest
