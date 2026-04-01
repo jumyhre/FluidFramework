@@ -42,7 +42,6 @@ steps:
     echo "Target branch: $SYSTEM_PULLREQUEST_TARGETBRANCH"
 
     # Normalize branch name (refs/heads/ai/foo -> ai/foo)
-    SRC_BRANCH="${SYSTEM_PULLREQUEST_SOURCEBRANCH#refs/heads/}"
     GH_BRANCH="ado-${SYSTEM_PULLREQUEST_PULLREQUESTID}"
 
     echo "GitHub branch will be: $GH_BRANCH"
@@ -50,9 +49,9 @@ steps:
     # ---- Fetch PR title + description from ADO ----
     ADO_PR_API="${SYSTEM_TEAMFOUNDATIONCOLLECTIONURI}${SYSTEM_TEAMPROJECTID}/_apis/git/repositories/${BUILD_REPOSITORY_ID}/pullRequests/${SYSTEM_PULLREQUEST_PULLREQUESTID}?api-version=7.1"
 
-    PR_JSON=$(curl -sS \
+    PR_JSON=$(curl -sS --fail \
       -H "Authorization: Bearer $SYSTEM_ACCESSTOKEN" \
-      "$ADO_PR_API")
+      "$ADO_PR_API" || { echo "Failed to fetch PR details"; exit 1; })
 
     PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
     PR_DESC=$(echo "$PR_JSON" | jq -r '.description')
@@ -98,12 +97,21 @@ steps:
 
     echo "Creating GitHub PR..."
 
-    curl -sS -X POST \
+    RESPONSE=$(curl -sS -w "%{http_code}" -o response.txt -X POST \
       -H "Authorization: token ${GITHUB_PAT}" \
       -H "Accept: application/vnd.github+json" \
       https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/pulls \
-      -d "$CREATE_PR_PAYLOAD" \
-      || echo "PR may already exist — branch updated."
+      -d "$CREATE_PR_PAYLOAD")
+
+    if [ "$RESPONSE" -eq 201 ]; then
+      echo "GitHub PR created successfully."
+    elif [ "$RESPONSE" -eq 422 ]; then
+      echo "PR may already exist — branch updated."
+    else
+      echo "Failed to create GitHub PR. HTTP status: $RESPONSE"
+      cat response.txt
+      exit 1
+    fi
 
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
