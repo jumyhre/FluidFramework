@@ -11,7 +11,7 @@ pool:
 variables:
 - group: ai-pr-bot-secrets
 - name: GITHUB_OWNER
-  value: microsoft
+  value: jumyhre # TODO: Change to microsoft when ready
 - name: GITHUB_REPO
   value: FluidFramework
 - name: GITHUB_BASE_BRANCH
