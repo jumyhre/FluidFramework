@@ -121,4 +121,4 @@ steps:
 
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-    GITHUB_PAT: $(GH_PAT)
+    GITHUB_PAT: $(GH_TEMP_PAT)
