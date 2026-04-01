@@ -67,14 +67,19 @@ steps:
     git remote add github "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git"
 
     # Map GitHub PAT into an env var (ADO secret variable -> env var)
-    export GIT_HTTP_EXTRAHEADER="AUTHORIZATION: bearer ${GITHUB_PAT}"
+    B64_AUTH=$(printf "x-access-token:%s" "${GITHUB_PAT}" | base64 | tr -d '\n')
+    export GIT_HTTP_EXTRAHEADER="AUTHORIZATION: Basic ${B64_AUTH}"
 
     # Add GitHub remote WITHOUT embedding PAT in URL (keeps token out of remote URL too)
     git remote remove github 2>/dev/null || true
     git remote add github "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git"
 
+    # Ensure we have the latest remote state recorded locally
+    git --config-env=http.extraheader=GIT_HTTP_EXTRAHEADER fetch github "refs/heads/${GH_BRANCH}:refs/remotes/github/${GH_BRANCH}" || true
+
+    # Overwrite the remote bot branch (safe force)
     git --config-env=http.extraheader=GIT_HTTP_EXTRAHEADER \
-      push github "HEAD:refs/heads/${GH_BRANCH}"
+      push --force-with-lease github "HEAD:refs/heads/${GH_BRANCH}"
 
     # ---- Build PR body safely (multiline-safe) ----
     PR_BODY="$(cat <<EOF
@@ -120,4 +125,4 @@ steps:
 
   env:
     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-    GITHUB_PAT: $(GH_PAT)
+    GITHUB_PAT: $(GH_TEMP_PAT)
