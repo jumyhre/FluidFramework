@@ -62,14 +62,11 @@ steps:
     echo "== PR Description =="
     echo "$PR_DESC"
 
-    # ---- Push branch to GitHub ----
-    git remote remove github 2>/dev/null || true
-    git remote add github "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git"
-
     # Map GitHub PAT into an env var (ADO secret variable -> env var)
     B64_AUTH=$(printf "x-access-token:%s" "${GITHUB_PAT}" | base64 | tr -d '\n')
     export GIT_HTTP_EXTRAHEADER="AUTHORIZATION: Basic ${B64_AUTH}"
 
+    # ---- Push branch to GitHub ----
     # Add GitHub remote WITHOUT embedding PAT in URL (keeps token out of remote URL too)
     git remote remove github 2>/dev/null || true
     git remote add github "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}.git"
