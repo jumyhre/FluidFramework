@@ -36,6 +36,11 @@ steps:
 - bash: |
     set -euo pipefail
 
+    if [[ ! "$SYSTEM_PULLREQUEST_SOURCEBRANCH" =~ ^refs/heads/(ai|copilot)/ ]]; then
+      echo "Not an ai/* or copilot/* PR – exiting"
+      exit 0
+    fi
+
     echo "== Azure DevOps PR Context =="
     echo "PR ID: $SYSTEM_PULLREQUEST_PULLREQUESTID"
     echo "Source branch: $SYSTEM_PULLREQUEST_SOURCEBRANCH"
